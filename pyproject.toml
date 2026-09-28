@@ -1,0 +1,9 @@
+[project]
+name = "homelessness-deaths"
+version = "0.1.0"
+description = "Simulation, cleaning, and testing scripts for a paper on cause of death among people experiencing homelessness in Toronto, 2022 to 2024."
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.5.3",
+    "polars>=1.44.2",
+]

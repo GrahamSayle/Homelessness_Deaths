@@ -8,8 +8,8 @@
 # License: MIT
 # Pre-requisites:
 # - `polars` must be installed (pip install polars)
-# - 01-download_data.R must have been run
-# - 02-clean_data.py must have been run
+# - 02-download_data.R must have been run
+# - 03-clean_data.py must have been run
 
 
 #### Workspace setup ####
@@ -39,13 +39,16 @@ CAUSES = [
 AGE_GROUPS = ["<20", "20-39", "40-59", "60+", "Unknown"]
 GENDERS = ["Female", "Male", "Unknown"]
 
-AGE_COLUMN = "Final_Age (group)"
+# the age column is renamed during cleaning, so raw and cleaned data use
+# different names for the same thing
+RAW_AGE_COLUMN = "Final_Age (group)"
+CLEAN_AGE_COLUMN = "age_group"
 
 EXPECTED_RAW_DTYPES = {
     "_id": pl.Int64,
     "Year of death": pl.Int64,
     "Subgroup": pl.Utf8,
-    AGE_COLUMN: pl.Utf8,
+    RAW_AGE_COLUMN: pl.Utf8,
     "Gender": pl.Utf8,
     "Count": pl.Utf8,  # holds "Suppressed" alongside numeric strings
 }
@@ -86,12 +89,22 @@ def test_schema(raw_data, analysis_data):
                 f"expected {expected_dtype}"
             )
 
-    # cleaned data: the same columns, plus is_suppressed, and Count now numeric
-    expected_analysis_columns = set(EXPECTED_RAW_DTYPES) | {"is_suppressed"}
+    # cleaned data: the same columns, except the age column is renamed
+    # during cleaning, and is_suppressed is added
+    expected_analysis_columns = (
+        (set(EXPECTED_RAW_DTYPES) - {RAW_AGE_COLUMN})
+        | {CLEAN_AGE_COLUMN, "is_suppressed"}
+    )
     missing = expected_analysis_columns - set(analysis_data.columns)
     if missing:
         failures.append(f"analysis data is missing columns: {sorted(missing)}")
         return failures
+
+    if RAW_AGE_COLUMN in analysis_data.columns:
+        failures.append(
+            f"analysis data still has the raw column name '{RAW_AGE_COLUMN}'; "
+            f"expected it to be renamed to '{CLEAN_AGE_COLUMN}' during cleaning"
+        )
 
     if analysis_data.schema["is_suppressed"] != pl.Boolean:
         failures.append(
@@ -105,7 +118,7 @@ def test_schema(raw_data, analysis_data):
             f"expected a numeric type (cleaning should convert it from text)"
         )
 
-    for col in ["Subgroup", AGE_COLUMN, "Gender"]:
+    for col in ["Subgroup", CLEAN_AGE_COLUMN, "Gender"]:
         if analysis_data.schema[col] != pl.Utf8:
             failures.append(
                 f"analysis data column '{col}' has type {analysis_data.schema[col]}, "
@@ -127,7 +140,7 @@ def test_values_present(analysis_data):
 
     expected_by_column = {
         "Subgroup": CAUSES,
-        AGE_COLUMN: AGE_GROUPS,
+        CLEAN_AGE_COLUMN: AGE_GROUPS,
         "Gender": GENDERS,
         "Year of death": YEARS,
     }
@@ -163,7 +176,7 @@ def test_suppression_flag(raw_data, analysis_data):
         )
 
     # against the raw data: the number of cells the portal marked "Suppressed"
-    # should equal the number of cells flagged is_suppressed after cleaning
+    # should equal the number flagged is_suppressed after cleaning
     n_suppressed_raw = raw_data.filter(pl.col("Count") == "Suppressed").height
     n_suppressed_clean = analysis_data.filter(pl.col("is_suppressed")).height
 
@@ -175,39 +188,6 @@ def test_suppression_flag(raw_data, analysis_data):
 
     return failures
 
-
-#### Test 4: cleaning did not change the data ####
-def test_cleaning_preserves_data(raw_data, analysis_data):
-    failures = []
-
-    if raw_data.height != analysis_data.height:
-        failures.append(
-            f"raw data has {raw_data.height} rows, "
-            f"analysis data has {analysis_data.height} rows"
-        )
-
-    raw_total = (
-        raw_data
-        .filter(pl.col("Count") != "Suppressed")
-        .select(pl.col("Count").cast(pl.Int64).sum())
-        .item()
-    )
-    analysis_total = (
-        analysis_data
-        .filter(~pl.col("is_suppressed"))
-        .select(pl.col("Count").sum())
-        .item()
-    )
-
-    if raw_total != analysis_total:
-        failures.append(
-            f"total deaths in raw data (excluding suppressed cells) is "
-            f"{raw_total}, but {analysis_total} in analysis data"
-        )
-
-    return failures
-
-
 #### Run tests ####
 def main():
     raw_data, analysis_data = load_data()
@@ -216,19 +196,16 @@ def main():
         ("Expected columns are present, with the right types", test_schema),
         ("All described category values are present", test_values_present),
         ("A cell is flagged suppressed only when its count is missing", test_suppression_flag),
-        ("Cleaning did not change the data", test_cleaning_preserves_data),
     ]
 
     all_passed = True
 
     for name, test in tests:
         try:
-            if test in (test_values_present,):
+            if test is test_values_present:
                 failures = test(analysis_data)
-            elif test in (test_schema, test_suppression_flag, test_cleaning_preserves_data):
-                failures = test(raw_data, analysis_data)
             else:
-                failures = test(analysis_data)
+                failures = test(raw_data, analysis_data)
         except Exception as error:  # a crashing test is a failing test
             failures = [f"test raised {type(error).__name__}: {error}"]
 

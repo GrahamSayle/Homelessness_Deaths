@@ -34,4 +34,4 @@ raw_data <- get_resource(cause_resource)
 
 #### Save data ####
 dir.create("data/01-raw_data", recursive = TRUE, showWarnings = FALSE)
-write_csv(raw_data, "data/01-raw_data/.csv")
+write_csv(raw_data, "data/01-raw_data/raw_data.csv")

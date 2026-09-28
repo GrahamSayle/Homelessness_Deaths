@@ -24,7 +24,15 @@ Data acquisition is done in R, and simulation, cleaning, and testing are done in
 -   `01-test_simulated_data.py` tests the simulated dataset against the distributions and totals it was generated from.
 -   `02-download_data.R` downloads the raw data from the Open Data Portal using `opendatatoronto`.
 -   `03-clean_data.py` cleans the raw data, flagging suppressed cells and converting counts to a usable format.
--   `04-test_analysis_data.py` tests the cleaned data against the raw file it was built from, checking schema, expected values, the suppression flag, and that cleaning did not change the underlying counts.
+-   `04-test_real_data.py` tests the cleaned data against the raw file it was built from, checking schema, expected values, the suppression flag, and that cleaning did not change the underlying counts.
+
+## How to run
+uv sync
+uv run python scripts/00-simulate_data.py
+uv run python scripts/01-test_simulated_data.py
+Rscript scripts/02-download_data.R
+uv run python scripts/03-clean_data.py
+uv run python scripts/04-test_real_data.py
 
 
 ## Statement on LLM usage

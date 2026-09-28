@@ -5,9 +5,11 @@
 # Date: 20 September 2026
 # Contact: g.sayle@mail.utoronto.ca
 # License: MIT
+# Pre-requisites:
 # - `polars` must be installed (pip install polars)
 # - `numpy` must be installed (pip install numpy)
 # - 02-download_data.R must have been run
+
 
 
 #### Workspace setup ####
