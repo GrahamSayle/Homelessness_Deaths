@@ -2,6 +2,36 @@ LLM: Claude
 Date: 20 September 2026
 
 User:
+using this outline for the paper, please give me a rough draft of the paper. You can do all of the analysis you want. Keep the rubric in mind and aim to maximize points in every section
+
+Claude:
+Working on it. Let me run the analysis, check the literature, then draft.No R in this sandbox, so I'll mock the figures in Python to check layout and numbers, then write the equivalent `ggplot2` code.Numbers check out. One thing to flag before I write: at 60 and over, drug toxicity (45) is still narrowly the single largest cause, ahead of cardiovascular disease (43) — it's the *share* that collapses, from 77% to 24%. I've written the claims accordingly rather than saying disease overtakes it outright.Draft's attached. Roughly 1,900 words of prose, four figures, two tables.
+
+**Structural changes I made to your outline, all rubric-driven**
+
+I deleted the Model, Results, and Discussion sections. The Donaldson task lists only title, author, date, abstract, introduction, data, and references, and the FAQ says to delete the starter-folder parts you don't need. I also dropped the estimand paragraph — estimand is a scored line on the Mawson, Howrah, Spadina and St George rubrics, but not on this one.
+
+I replaced "Outcome variables" and "Predictor variables" with substantive subheadings, since there's no model to have outcomes and predictors, and the checks forbid generic section names.
+
+**The argument**
+
+Drug toxicity is 457 of 825 deaths, and its share falls from 77% among people aged 20–39 to 24% at 60 and over. The suppression finding carries real weight: all seven withheld cells describe people under 20, and they're the only under-20 cells in the file, so the deaths of homeless minors can't be counted from the open data at all. That runs through the measurement section, the age figure, the central figure, and the appendix.
+
+I've written §2.6 so the 35% fall from 2022 to 2024 is presented as partly a collection artefact — pending cases go 4, 6, 28 — rather than as a decline in mortality.
+
+**Verified**
+
+All 36 numeric claims check out against the file, and the prose contains none of the banned words. Colours are three hues checked for colour-vision deficiency; every bar is direct-labelled so colour never carries meaning alone.
+
+**What you need to do**
+
+I have no R here, so nothing is rendered — render before committing. Put your GitHub URL in the `thanks:` field. The download script isn't written yet; the package ID is `8546b6d9-41ec-48df-895f-09e86784ef26` and the resource is "Homeless deaths by cause". Sketches, the README LLM statement, and this whole chat in `other/llm/usage.txt` are all still outstanding.
+
+Most of all: this is my draft, not yours. The Prose item rewards writing that sounds like a person who understands the material, and a marker who reads your repo can see which parts you wrote. Rewrite the introduction and measurement sections in your own voice, and check my reading of the TPH methodology page against the source yourself.
+
+Sources: [Toronto Public Health — Deaths of People Experiencing Homelessness](https://www.toronto.ca/community-people/health-wellness-care/health-inspections-monitoring/monitoring-deaths-of-homeless-people/), [Richard et al. 2024, *Frontiers in Public Health*](https://pmc.ncbi.nlm.nih.gov/articles/PMC11341496/), [Booth et al. 2023, *Addiction* (ICES release)](https://www.ices.on.ca/news-releases/staggering-increase-in-opioid-related-deaths-among-people-experiencing-homelessness-new-study-finds/), [Hwang 2000, *JAMA*](https://homelesshub.ca/wp-content/uploads/2023/12/Mortality_in_Toronto_JAMA.pdf)
+
+User:
 Here is my introduction, give me your rewritten version.
 
 
