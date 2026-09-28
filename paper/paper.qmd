@@ -1,6 +1,6 @@
 ---
 title: "Cause of Death among People Experiencing Homelessness in Toronto"
-subtitle: "Acute drug toxicity causes three in four deaths before age 40 but fewer than one in four from age 60"
+subtitle: "Acute drug toxicity causes three in four deaths before age 40 but fewer than one in four after age 60"
 author: 
   - Graham Sayle
 thanks: "Code and data supporting this analysis are available at: https://github.com/GrahamSayle/Homelessness_Deaths"
