@@ -28,5 +28,7 @@ raw_data = raw_data.with_columns(
     pl.when(pl.col("is_suppressed")).then(None).otherwise(pl.col("Count")).alias("Count")
 )
 
+raw_data = raw_data.rename({"Final_Age (group)": "age_group"})
+
 ## Write data
 raw_data.write_csv("data/02-analysis_data/analysis_data.csv")

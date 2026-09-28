@@ -1,14 +1,27 @@
 ---
-title: "My title"
-subtitle: "My subtitle if needed"
+title: "Cause of Death among People Experiencing Homelessness in Toronto"
+subtitle: "Acute drug toxicity causes three in four deaths before age 40 but fewer than one in four from age 60"
 author: 
-  - First author
-  - Another author
-thanks: "Code and data are available at: [https://github.com/RohanAlexander/starter_folder](https://github.com/RohanAlexander/starter_folder)."
+  - Graham Sayle
+thanks: "Code and data supporting this analysis are available at: https://github.com/GrahamSayle/Homelessness_Deaths"
 date: today
 date-format: long
-abstract: "First sentence. Second sentence. Third sentence. Fourth sentence."
-format: pdf
+abstract: "From 2022 to 2024, Toronto Public Health published the records of 825 deaths of people experiencing homelessness. In this paper these counts are used to describe what they died of and at what age. Of these deaths, 457 were caused by acute drug toxicity, which accounts for 77% of deaths of people aged 20 to 39 but only 24% of those aged 60 and over. This is important to highlight because the two groups need different responses: drug policy for the younger population, and medical and long-term care for the older."
+format:
+  pdf:
+    fig-pos: "H"
+    tbl-pos: "H"
+    include-in-header:
+      text: |
+        \usepackage{float}
+        \usepackage{placeins}
+        \floatplacement{table}{H}
+        \setlength{\intextsep}{10pt plus 2pt minus 2pt}
+
+        \renewcommand{\topfraction}{0.9}
+        \renewcommand{\bottomfraction}{0.8}
+        \renewcommand{\textfraction}{0.07}
+        \renewcommand{\floatpagefraction}{0.8}
 number-sections: true
 bibliography: references.bib
 ---
@@ -18,242 +31,428 @@ bibliography: references.bib
 #| warning: false
 #| message: false
 
+library(here)
 library(tidyverse)
-library(palmerpenguins)
+library(tinytable)
+library(ggplot2)
+
+analysis_data <-
+  read_csv(
+    here::here("data/02-analysis_data/analysis_data.csv"),
+    show_col_types = FALSE
+  )
+
+total_deaths <- sum(analysis_data$Count, na.rm = TRUE)
+male_deaths <- analysis_data[analysis_data$Gender == "Male", ]
+male_deaths_count <- sum(male_deaths$Count, na.rm = TRUE)
+male_deaths_proportion <- round(male_deaths_count / total_deaths * 100)
+
+drug_deaths <- analysis_data[analysis_data$Subgroup == "Acute Drug Toxicity", ]
+drug_deaths_count <- sum(drug_deaths$Count, na.rm = TRUE)
+
+single_deaths <- analysis_data[analysis_data$Count == 1, ]
+single_deaths_counts <- sum(single_deaths$Count, na.rm = TRUE)
+
+suppressed_cells <- sum(analysis_data$is_suppressed)
+
+drug_by_age <- analysis_data |>
+  summarise(
+    drug = sum(Count[Subgroup == "Acute Drug Toxicity"], na.rm = TRUE),
+    all = sum(Count, na.rm = TRUE),
+    .by = age_group
+  ) |>
+  mutate(share = round(100 * drug / all))
+
+share_young <- drug_by_age$share[drug_by_age$age_group == "20-39"]
+share_old   <- drug_by_age$share[drug_by_age$age_group == "60+"]
+
+unknown_deaths <- analysis_data[analysis_data$Subgroup == "Unknown", ]
+unknown_deaths_count <- sum(unknown_deaths$Count, na.rm = TRUE)
+
+deaths_by_age <-
+  analysis_data |>
+  summarise(deaths = sum(Count, na.rm = TRUE), .by = age_group) |>
+  mutate(share = round(100 * deaths / sum(deaths)))
+
+age_under20_count <- deaths_by_age$deaths[deaths_by_age$age_group == "<20"]
+age_20_39_count   <- deaths_by_age$deaths[deaths_by_age$age_group == "20-39"]
+age_40_59_count   <- deaths_by_age$deaths[deaths_by_age$age_group == "40-59"]
+age_60plus_count  <- deaths_by_age$deaths[deaths_by_age$age_group == "60+"]
+age_unknown_count <- deaths_by_age$deaths[deaths_by_age$age_group == "Unknown"]
+
+age_under20_share <- deaths_by_age$share[deaths_by_age$age_group == "<20"]
+age_20_39_share   <- deaths_by_age$share[deaths_by_age$age_group == "20-39"]
+age_40_59_share   <- deaths_by_age$share[deaths_by_age$age_group == "40-59"]
+age_60plus_share  <- deaths_by_age$share[deaths_by_age$age_group == "60+"]
+age_unknown_share <- deaths_by_age$share[deaths_by_age$age_group == "Unknown"]
+
+deaths_40_59_men <- sum(
+  analysis_data$Count[analysis_data$Gender == "Male" &
+                        analysis_data$age_group == "40-59"],
+  na.rm = TRUE
+)
+deaths_40_59_men_share <- round(100 * deaths_40_59_men / age_40_59_count)
+deaths_20_39_men <- sum(
+  analysis_data$Count[analysis_data$Gender == "Male" &
+                        analysis_data$age_group == "20-39"],
+  na.rm = TRUE
+)
+deaths_20_39_men_share <- round(100 * deaths_20_39_men / age_20_39_count)
+
+deaths_60plus_men <- sum(
+  analysis_data$Count[analysis_data$Gender == "Male" &
+                        analysis_data$age_group == "60+"],
+  na.rm = TRUE
+)
+deaths_60plus_men_share <- round(100 * deaths_60plus_men / age_60plus_count)
+# Deaths for one cause within one age group.
+cell <- function(cause, age) {
+  sum(
+    analysis_data$Count[analysis_data$Subgroup == cause &
+                          analysis_data$age_group == age],
+    na.rm = TRUE
+  )
+}
+
+# All deaths within one age group.
+age_total <- function(age) {
+  sum(analysis_data$Count[analysis_data$age_group == age], na.rm = TRUE)
+}
+
+# A cause's share of deaths within one age group, as a whole percentage.
+cell_share <- function(cause, age) {
+  round(100 * cell(cause, age) / age_total(age))
+}
+
+# The largest cause among people aged 20 to 39 other than drug toxicity.
+next_largest_20_39 <-
+  analysis_data |>
+  filter(age_group == "20-39", Subgroup != "Acute Drug Toxicity") |>
+  summarise(deaths = sum(Count, na.rm = TRUE), .by = Subgroup) |>
+  slice_max(deaths, n = 1)
+
+# Cardiovascular disease and other diseases combined, among people 60 and over.
+disease_60plus <-
+  cell("Cardiovascular Disease", "60+") + cell("Other Diseases", "60+")
+
+# The under-20 cells, all of which are suppressed.
+under20_cells <- sum(analysis_data$age_group == "<20")
+
+under20_causes <-
+  analysis_data |>
+  filter(age_group == "<20") |>
+  distinct(Subgroup) |>
+  arrange(Subgroup) |>
+  pull(Subgroup) |>
+  tolower() |>
+  knitr::combine_words()
 ```
 
 
 # Introduction
 
-Overview paragraph
+Toronto's unhoused population dies far earlier than the housed population. A cohort study of Toronto residents found 2.7 deaths per 100 person-years against 0.7 among matched housed residents, with those who died on average seventeen years younger [@richard2024]. Drug poisoning accounts for a growing share of those deaths: among all opioid-related overdose deaths in Ontario, the proportion involving someone who was unhoused rose from 7.2% in late 2017 to 16.8% by mid-2021 [@booth2024]. These studies show that unhoused people die younger, and that they account for a rising share of Ontario's opioid deaths, but neither sets out how cause of death varies with age.
 
-Estimand paragraph
+This paper uses the counts of deaths by cause, age group and gender that Toronto Public Health published for 2022 to 2024. As @sec-cause-age shows, acute drug toxicity accounts for most recorded deaths and its share falls sharply with age, while cardiovascular disease and other causes follow the reverse pattern. A population dying of disease in later life needs medical and long-term care; one dying of drug poisoning in its twenties and thirties needs a drug policy response, and loses far more years of life to each death.
 
-Results paragraph
-
-Why it matters paragraph
-
-Telegraphing paragraph: The remainder of this paper is structured as follows. @sec-data....
-
-
-
-
-
+The remainder of this paper is structured as follows. @sec-data introduces the dataset and explains how a death in the city becomes a record, covering the completeness of recent records in @sec-year, cause of death in @sec-cause, age and gender in @sec-age-gender, and the relationship between the two in @sec-cause-age. @sec-appendix-data records the cleaning steps and the tests applied to the data.
 
 # Data {#sec-data}
 
 ## Overview
 
-We use the statistical programming language R [@citeR].... Our data [@shelter].... Following @tellingstories, we consider...
+The data come from the Deaths of People Experiencing Homelessness dataset [@deaths], published by Toronto Public Health (TPH) through the City of Toronto Open Data Portal. We obtain and analyse them in R [@citeR], drawing on the tidyverse collection of packages [@tidyverse], opendatatoronto [@opendatatoronto] for programmatic access to the portal, here [@here] for file paths, ggplot2 [@ggplot2] for figures, tinytable [@tinytable] for tables, and knitr [@knitr] for rendering. Following @tellingstories, we simulate the dataset we expect before acquiring it, which forces us to specify its structure and the relationships we anticipate in advance of seeing them; that simulation, and the tests applied to both the simulated and the actual data, are written in Python [@citePython] using polars [@citePolars] and numpy [@citeNumpy], with the environment managed by uv [@citeUv].
 
-Overview text
+TPH leads the collection, analysis, and reporting of deaths of people experiencing homelessness in Toronto, drawing on records contributed by Toronto Shelter and Support Services, community agencies, the Toronto Homeless Memorial, and the Office of the Chief Coroner (OCC) for Ontario.
 
-## Measurement
-	
-Some paragraphs about how we go from a phenomena in the world to an entry in the dataset.
+The portal publishes four related resources for this dataset, breaking deaths down by month, by demographic characteristics, by setting of death, and by cause of death. The last of these is used, which is the only resource that crosses cause of death with both age group and gender. The data are published as aggregated counts rather than as individual records: each row reports the number of deaths for one combination of year, cause of death, age group, and gender. The extract contains 125 such rows covering the years 2022 through 2024, and records 825 deaths in total — 320 in 2022, 298 in 2023, and 207 in 2024. Cause of death is recorded in eight categories: acute drug toxicity, cardiovascular disease, homicide, other diseases, suicide, unintentional injury, and two categories for deaths whose cause has not been established, recorded as "pending" and "unknown."
 
-## Outcome variables
+The portal describes a rule of suppression as redacting small counts to maintain privacy and confidentiality, however this does not appear to be the case. There are `r single_deaths_counts` cells with a count of 1, but only `r suppressed_cells` suppressed cells. However, every cell with age <20 is suppressed, so perhaps the suppression is to preserve the privacy and confidentiality of the youngest population specifically.
 
-Add graphs, tables and text. Use sub-sub-headings for each outcome variable or update the subheading to be singular.
+An alternative to the resource used would have been the demographics or setting resources published alongside it. The cause of death resource was preferred because our interest is in how cause varies across groups, and neither of the alternatives provided cause.
 
-
-
-Some of our data is of penguins (@fig-bills), from @palmerpenguins.
+@tbl-sample shows a sample of six rows from the cleaned data, chosen to include one suppressed cell alongside typical ones.
 
 ```{r}
-#| label: fig-bills
-#| fig-cap: Bills of penguins
-#| echo: false
-
-ggplot(penguins, aes(x = island, fill = species)) +
-  geom_bar(alpha = 0.8) +
-  scale_fill_manual(values = c("darkorange","purple","cyan4"),
-                    guide = "none") +
-  theme_minimal() +
-  facet_wrap(~species, ncol = 1) +
-  coord_flip()
-```
-
-Talk more about it.
-
-And also planes (@fig-planes). (You can change the height and width, but don't worry about doing that until you have finished every other aspect of the paper - Quarto will try to make it look nice and the defaults usually work well once you have enough text.)
-
-```{r}
-#| label: fig-planes
-#| fig-cap: Relationship between wing length and width
+#| label: tbl-sample
+#| tbl-cap: "Sample rows from the cleaned dataset"
+#| tbl-pos: "H"
 #| echo: false
 #| warning: false
 #| message: false
 
-analysis_data <- read_csv(here::here("data/02-analysis_data/analysis_data.csv"))
+sample_rows <-
+  analysis_data |>
+  filter(!(is_suppressed & row_number() > which(is_suppressed)[1])) |>
+  slice(c(1:5, which(is_suppressed)[1]))
 
-analysis_data |> 
-  ggplot(aes(x = width, y = length)) +
-  geom_point(alpha = 0.8) +
-  theme_minimal() +
-  labs(x = "Wing width (mm)",
-       y = "Wing length (mm)")
+sample_rows |>
+  select(
+    Year = `Year of death`,
+    `Cause of death` = Subgroup,
+    `Age group` = age_group,
+    Gender,
+    Count,
+    Suppressed = is_suppressed
+  ) |>
+  tt() |>
+  format_tt(escape = TRUE)
 ```
 
-Talk way more about it. 
+Each row is a count of deaths for one combination of year, cause of death, age group, and gender, rather than a record of an individual death. `Year` takes one of three values, 2022 to 2024. `Cause of death` takes one of eight values: Acute Drug Toxicity, Cardiovascular Disease, Homicide, Other Diseases, Pending, Suicide, Unintentional Injury, and Unknown, where Pending marks a death still under investigation and Unknown marks one where a cause was never established. `Age group` takes one of five values: <20, 20-39, 40-59, 60+, and Unknown. `Gender` takes one of three values: Female, Male, and Unknown. `Count` is the number of deaths matching that combination, and is a whole number when reported; `Suppressed` is TRUE for cells where the portal withholds the count to protect privacy, in which case `Count` is recorded as missing rather than zero.
 
-## Predictor variables
+## Measurement {#sec-measurement}
 
-Add graphs, tables and text.
+Toronto Public Health uses a broad definition of homelessness: a person without stable, permanent, appropriate housing, or the immediate prospect, means and ability to acquire it, including someone staying temporarily with friends or family after a long period without permanent housing [@torontoPHmethod].
 
-Use sub-sub-headings for each outcome variable and feel free to combine a few into one if they go together naturally.
+A death becomes an entry through one of four channels [@torontoPHmethod]. Community agencies submit reports through a secure online form. The City's Shelter and Support Services division reports the deaths of shelter residents. The Toronto Homeless Memorial, a community-run record, supplies monthly summaries. Since 2024, the Office of the Chief Coroner of Ontario has shared death investigation data. Each channel reaches a different part of the population, and the portal notes that the data reflect only deaths reported to TPH and may underestimate the true number. The counts are best read as deaths known to a set of institutions, not as all deaths, and are thus a lower bound on the true numbers.
 
+The addition of coroner data is the clearest illustration of how much the measurement instrument shapes the measurement. Toronto Public Health notes that adding this channel in 2024 increased the number of reported deaths from 2022 onward [@torontoPHmethod]. 
 
+Finally, the counts carry no denominator. The file records deaths, not the population at risk, so it supports statements about the composition of deaths and not about rates. 
 
-
-
-
-
-
-# Model
-
-The goal of our modelling strategy is twofold. Firstly,...
-
-Here we briefly describe the Bayesian analysis model used to investigate... Background details and diagnostics are included in [Appendix -@sec-model-details].
-
-## Model set-up
-
-Define $y_i$ as the number of seconds that the plane remained aloft. Then $\beta_i$ is the wing width and $\gamma_i$ is the wing length, both measured in millimeters.  
-
-\begin{align} 
-y_i|\mu_i, \sigma &\sim \mbox{Normal}(\mu_i, \sigma) \\
-\mu_i &= \alpha + \beta_i + \gamma_i\\
-\alpha &\sim \mbox{Normal}(0, 2.5) \\
-\beta &\sim \mbox{Normal}(0, 2.5) \\
-\gamma &\sim \mbox{Normal}(0, 2.5) \\
-\sigma &\sim \mbox{Exponential}(1)
-\end{align}
-
-We run the model in R [@citeR] using the `rstanarm` package of @rstanarm. We use the default priors from `rstanarm`.
-
-
-### Model justification
-
-We expect a positive relationship between the size of the wings and time spent aloft. In particular...
-
-We can use maths by including latex between dollar signs, for instance $\theta$.
-
-
-# Results
-
-Our results are summarized in @tbl-modelresults.
+## Year {#sec-year}
+@fig-year-total shows the number of deaths recorded in each year. Recorded deaths fall from 320 in 2022 to 207 in 2024. Whether this reflects fewer deaths or fewer being reported cannot be established from these data.
 
 ```{r}
+#| label: fig-year-total
+#| fig-cap: "Deaths of people experiencing homelessness in Toronto by year, 2022 to 2024. Counts exclude suppressed cells."
 #| echo: false
-#| eval: true
+#| warning: false
+#| message: false
+#| fig-width: 6.2
+#| fig-height: 2.8
+#| out-width: 100%
+year_totals <-
+  analysis_data |>
+  summarise(deaths = sum(Count, na.rm = TRUE), .by = `Year of death`)
+
+year_totals |>
+  ggplot(aes(x = factor(`Year of death`), y = deaths)) +
+  geom_col(fill = "#2166AC", width = 0.55) +
+  geom_text(aes(label = deaths), vjust = -0.5, size = 3.2, colour = "grey25") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "Year", y = "Number of deaths") +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey90", linewidth = 0.3)
+  )
+```
+
+## Cause of death {#sec-cause}
+
+The number of deaths recorded against each cause across the whole period are shown in @fig-cause. Acute drug toxicity accounts for `r drug_deaths_count` of the `r format(total_deaths, big.mark = ",")` deaths, or 55%, which is more than the other seven categories combined. No other single cause reaches 110. The second largest category is not a cause at all but the absence of one: `r unknown_deaths_count` deaths are recorded as unknown.
+
+```{r}
+#| label: fig-cause
+#| fig-cap: "Deaths of people experiencing homelessness in Toronto by cause of death, 2022 to 2024. Cells with counts too small to publish are suppressed and excluded."
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 6.2
+#| fig-height: 2.3
+#| out-width: 100%
+
+cause_counts <-
+  analysis_data |>
+  summarise(deaths = sum(Count, na.rm = TRUE), .by = Subgroup) |>
+  mutate(
+    share = 100 * deaths / sum(deaths),
+    highlight = Subgroup == "Acute Drug Toxicity",
+    Subgroup = fct_reorder(Subgroup, deaths)
+  )
+
+cause_counts |>
+  ggplot(aes(x = deaths, y = Subgroup, fill = highlight)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = deaths), hjust = -0.2, size = 3, colour = "grey25") +
+  scale_fill_manual(
+    values = c("TRUE" = "#2166AC", "FALSE" = "#8C8C8C"),
+    guide = "none"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 450, 100),
+    expand = expansion(mult = c(0, 0.16))
+  ) +
+  labs(x = "Number of deaths", y = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.border = element_rect(fill = NA, colour = "grey80"),
+    panel.grid.major.x = element_line(colour = "grey88", linewidth = 0.3),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks.x = element_line(colour = "grey70", linewidth = 0.3),
+    axis.title.x = element_text(margin = margin(t = 8), colour = "grey25"),
+    plot.margin = margin(4, 14, 4, 12)
+  )
+```
+
+@tbl-cause-year  shows that the same general trend is observed across the three years, with Acute Drug Toxicity being the dominant cause with Cardiovascular Disease and Other Diseases at much lower counts.
+
+```{r}
+#| label: tbl-cause-year
+#| tbl-cap: "Deaths of people experiencing homelessness in Toronto by cause of death and year, 2022 to 2024"
+#| tbl-pos: "H"
+#| echo: false
 #| warning: false
 #| message: false
 
-library(rstanarm)
+cause_by_year <-
+  analysis_data |>
+  summarise(deaths = sum(Count, na.rm = TRUE), .by = c(Subgroup, `Year of death`)) |>
+  pivot_wider(names_from = `Year of death`, values_from = deaths, values_fill = 0) |>
+  relocate(`2022`, `2023`, `2024`, .after = Subgroup) |>
+  arrange(desc(`2022` + `2023` + `2024`))
 
-first_model <-
-  readRDS(file = here::here("models/first_model.rds"))
+totals_row <-
+  cause_by_year |>
+  summarise(across(where(is.numeric), sum)) |>
+  mutate(Subgroup = "Total")
+
+cause_by_year |>
+  bind_rows(totals_row) |>
+  rename(`Cause of death` = Subgroup) |>
+  tt() |>
+  style_tt(i = nrow(cause_by_year) + 1, line = "t", line_width = 0.05)
 ```
+
+## Age and gender {#sec-age-gender}
+
+@fig-age-gender shows every recorded death by age group and gender. Ages below 60 dominate the count, with 40-59 accounting for `r age_40_59_share`% of the deaths and 20-39 accounting for `r age_20_39_share`%. 60 and over only had `r age_60plus_share`%. 
+
+Four in five deaths were men, and an imbalance is seen in every age group. The percentage of deaths that were male per age group rises with age, being `r deaths_20_39_men_share`% for ages 20-39, `r deaths_40_59_men_share`% for ages 40-59, and `r deaths_60plus_men_share`% for ages 60 and over. Given that the portal gives no information on the total counts of unhoused people, no inference can be made on the rates of death of the population.
 
 ```{r}
+#| label: fig-age-gender
+#| fig-cap: "Deaths of people experiencing homelessness in Toronto by age group and gender, 2022 to 2024. The under-20 group is omitted because every cell for that age group is suppressed, and deaths with an unknown or unrecorded age group are also omitted. Deaths recorded with an unknown gender are also omitted from this figure."
 #| echo: false
-#| eval: true
-#| label: tbl-modelresults
-#| tbl-cap: "Explanatory models of flight time based on wing width and wing length"
 #| warning: false
+#| message: false
+#| fig-width: 6.2
+#| fig-height: 2.8
+#| out-width: 100%
 
-modelsummary::modelsummary(
-  list(
-    "First model" = first_model
-  ),
-  statistic = "mad",
-  fmt = 2
-)
+age_order <- c("20-39", "40-59", "60+")
+gender_order <- c("Female", "Male")
+
+age_gender_totals <-
+  analysis_data |>
+  filter(
+    !is.na(age_group), age_group %in% age_order,
+    !is.na(Gender), Gender != "Unknown"
+  ) |>
+  summarise(deaths = sum(Count, na.rm = TRUE), .by = c(age_group, Gender)) |>
+  mutate(
+    age_group = factor(age_group, levels = age_order),
+    Gender = factor(Gender, levels = gender_order)
+  )
+
+age_gender_totals |>
+  ggplot(aes(x = age_group, y = deaths, fill = Gender)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.65) +
+  geom_text(
+    aes(label = deaths),
+    position = position_dodge(width = 0.7),
+    vjust = -0.5,
+    size = 3,
+    colour = "grey25"
+  ) +
+  scale_fill_manual(values = c("Female" = "#B2182B", "Male" = "#2166AC")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "Age group", y = "Number of deaths", fill = "Gender") +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey90", linewidth = 0.3),
+    legend.position = "top",
+    legend.title = element_text(size = 9),
+    legend.text = element_text(size = 9)
+  )
 ```
 
+## Cause of death and age {#sec-cause-age}
 
+@fig-cause-age shows the distribution of the causes of death across the age groups. The shape of the distribution changes across the panels. Among people aged 20 to 39, acute drug toxicity accounts for `r cell("Acute Drug Toxicity", "20-39")` of `r age_total("20-39")` deaths, or `r cell_share("Acute Drug Toxicity", "20-39")`%, while the next largest cause, `r tolower(next_largest_20_39$Subgroup)`, accounts for `r next_largest_20_39$deaths`. Among people aged 40 to 59 it accounts for `r cell("Acute Drug Toxicity", "40-59")` of `r age_total("40-59")`, or `r cell_share("Acute Drug Toxicity", "40-59")`%. Among people aged 60 and over the count falls to `r cell("Acute Drug Toxicity", "60+")` of `r age_total("60+")`, or `r cell_share("Acute Drug Toxicity", "60+")`%, and drug toxicity is only narrowly the largest single category, ahead of cardiovascular disease at `r cell("Cardiovascular Disease", "60+")` and deaths of unknown cause at `r cell("Unknown", "60+")`. Taking cardiovascular disease and other diseases together, disease accounts for `r disease_60plus` deaths in that age group against `r cell("Acute Drug Toxicity", "60+")` from drug toxicity.
 
+Two further features are worth drawing out. Deaths of unknown cause rise with age, from `r cell("Unknown", "20-39")` among people aged 20 to 39 to `r cell("Unknown", "60+")` among people aged 60 and over, and they make up `r cell("Unknown", "Unknown")` of the `r age_total("Unknown")` deaths where age itself was not recorded, so the least documented deaths are concentrated among the oldest and the least identified. 
 
-# Discussion
+```{r}
+#| label: fig-cause-age
+#| fig-cap: "Deaths of people experiencing homelessness in Toronto by cause of death and age group, 2022 to 2024. The under-20 group is omitted because every cell for that age group is suppressed; deaths with an unknown or unrecorded age group are also omitted."
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 6.2
+#| fig-height: 3.2
+#| out-width: 100%
 
-## First discussion point {#sec-first-point}
+age_order <- c("20-39", "40-59", "60+")
 
-If my paper were 10 pages, then should be be at least 2.5 pages. The discussion is a chance to show off what you know and what you learnt from all this. 
+cause_order <-
+  analysis_data |>
+  summarise(deaths = sum(Count, na.rm = TRUE), .by = Subgroup) |>
+  arrange(deaths) |>
+  pull(Subgroup)
 
-## Second discussion point
+cause_by_age <-
+  analysis_data |>
+  filter(!is.na(age_group), !age_group %in% c("Unknown", "<20")) |>
+  summarise(deaths = sum(Count, na.rm = TRUE), .by = c(Subgroup, age_group)) |>
+  # A cause with no rows in an age group had no recorded deaths there; show it as 0.
+  complete(Subgroup, age_group, fill = list(deaths = 0)) |>
+  mutate(
+    Subgroup = factor(Subgroup, levels = cause_order),
+    age_group = factor(age_group, levels = age_order),
+    highlight = Subgroup == "Acute Drug Toxicity"
+  )
 
-Please don't use these as sub-heading labels - change them to be what your point actually is.
+cause_by_age |>
+  ggplot(aes(x = deaths, y = Subgroup, fill = highlight)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = deaths), hjust = -0.2, size = 2.5) +
+  expand_limits(x = 240) +
+  facet_wrap(~age_group, nrow = 1) +
+  scale_fill_manual(values = c("TRUE" = "#2166AC", "FALSE" = "#8C8C8C"), guide = "none") +
+  scale_x_continuous(breaks = c(0, 100, 200), expand = expansion(mult = c(0, 0.12))) +
+  labs(x = "Number of deaths", y = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(
+    panel.spacing.x = unit(1.2, "lines"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_line(colour = "grey90", linewidth = 0.3),
+    strip.background = element_rect(fill = "grey95", colour = NA),
+    strip.text = element_text(face = "bold", colour = "grey25")
+  )
+```
 
-## Third discussion point
+The published records describe two different patterns of death. Before the age of 60, deaths of people experiencing homelessness in Toronto are dominated by acute drug toxicity. From 60 onward, cardiovascular and other diseases together account for more deaths than drug toxicity does. Men account for most deaths in every age group. These are counts of deaths known to Toronto Public Health rather than all deaths, they carry no denominator, and they say nothing about people under 20, whose deaths are recorded but withheld from the published file.
 
-## Weaknesses and next steps
-
-Weaknesses and next steps should also be included.
-
+\FloatBarrier
 \newpage
+
+# References {-}
+
+::: {#refs}
+:::
 
 \appendix
 
-# Appendix {-}
+# Additional data details {#sec-appendix-data}
 
+## Cleaning
 
-# Additional data details
+The raw resource records Count as text rather than as a number, because cells recording individuals aged less than 20 contain the string "Suppressed" in place of a value. Cleaning identifies which cells were suppressed and replaces their Count with a missing value, so that later summaries can exclude them by filtering on missingness rather than on the string itself.
 
-# Model details {#sec-model-details}
+is_suppressed is derived from the original Count column before it is modified, so it reflects what the portal actually published rather than being inferred afterward from a missing value — this distinguishes a cell the portal suppressed from one that might be missing for some other reason. 
 
-## Posterior predictive check
+The Final_Age (group) column was renamed to age_group in the cleaning script for convenience.
 
-In @fig-ppcheckandposteriorvsprior-1 we implement a posterior predictive check. This shows...
+## Tests
 
-In @fig-ppcheckandposteriorvsprior-2 we compare the posterior with the prior. This shows... 
+The simulated data are tested in Python, using polars and numpy, against the same distributional parameters used to generate them. Following @tellingstories, writing these tests before acquiring the real data forces the structure of the dataset — its columns, its categories, and the range each one can take — to be specified in advance rather than discovered after the fact. Three checks are applied: that the simulated data frame has the expected columns and that every column takes only values from its expected set; that the observed proportion of each category falls within a tolerance of its simulated probability, using the binomial standard error at each proportion rather than a single fixed tolerance across categories of very different sizes; and that the total count, and the count for each year, match the number of deaths the simulation was told to generate.
 
-```{r}
-#| eval: true
-#| echo: false
-#| message: false
-#| warning: false
-#| label: fig-ppcheckandposteriorvsprior
-#| layout-ncol: 2
-#| fig-cap: "Examining how the model fits, and is affected by, the data"
-#| fig-subcap: ["Posterior prediction check", "Comparing the posterior with the prior"]
-
-pp_check(first_model) +
-  theme_classic() +
-  theme(legend.position = "bottom")
-
-posterior_vs_prior(first_model) +
-  theme_minimal() +
-  scale_color_brewer(palette = "Set1") +
-  theme(legend.position = "bottom") +
-  coord_flip()
-```
-
-## Diagnostics
-
-@fig-stanareyouokay-1 is a trace plot. It shows... This suggests...
-
-@fig-stanareyouokay-2 is a Rhat plot. It shows... This suggests...
-
-```{r}
-#| echo: false
-#| eval: true
-#| message: false
-#| warning: false
-#| label: fig-stanareyouokay
-#| fig-cap: "Checking the convergence of the MCMC algorithm"
-#| fig-subcap: ["Trace plot", "Rhat plot"]
-#| layout-ncol: 2
-
-plot(first_model, "trace")
-
-plot(first_model, "rhat")
-```
-
-
-
-\newpage
-
-
-# References
-
-
+The real data are also tested in Python, using polars and numpy. The first confirms that both the raw and cleaned data have the columns the rest of the pipeline assumes, and that each column has the type it should: Year of death and _id as integers, Subgroup, age group, and Gender as text, and, in the cleaned data, is_suppressed as a boolean and Count as a number rather than the text it is in the raw file, since the raw resource records suppressed cells as the string "Suppressed" rather than leaving them blank. The second confirms that every value the dataset's documentation describes actually appears at least once in the cleaned data — not only that no unexpected value has crept in, but that no described category, such as a rarer cause of death, has silently disappeared during cleaning. The third confirms that a cell is flagged is_suppressed exactly when, and only when, its Count is missing. This is checked in both directions within the cleaned data, and cross-checked against the raw file: the number of cells the portal marked "Suppressed" must equal the number flagged is_suppressed after cleaning, so a bug that mislabelled or dropped a suppression cannot pass silently. The fourth confirms that cleaning did not alter the data itself. The raw and cleaned datasets must have the same number of rows, and the total number of deaths must agree between them once suppressed cells, whose counts are unknown, are excluded from both sides. 

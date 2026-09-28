@@ -1,4 +1,4 @@
-_id,Year of death,Subgroup,Final_Age (group),Gender,Count,is_suppressed
+_id,Year of death,Subgroup,age_group,Gender,Count,is_suppressed
 1,2022,Acute Drug Toxicity,20-39,Female,23,false
 2,2024,Pending,60+,Female,1,false
 3,2024,Cardiovascular Disease,60+,Male,4,false
