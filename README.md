@@ -27,13 +27,14 @@ Data acquisition is done in R, and simulation, cleaning, and testing are done in
 -   `04-test_real_data.py` tests the cleaned data against the raw file it was built from, checking schema, expected values, the suppression flag, and that cleaning did not change the underlying counts.
 
 ## How to run
+```
 uv sync
 uv run python scripts/00-simulate_data.py
 uv run python scripts/01-test_simulated_data.py
 Rscript scripts/02-download_data.R
 uv run python scripts/03-clean_data.py
 uv run python scripts/04-test_real_data.py
-
+```
 
 ## Statement on LLM usage
 

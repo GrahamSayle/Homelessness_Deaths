@@ -11,7 +11,6 @@
 # - 02-download_data.R must have been run
 # - 03-clean_data.py must have been run
 
-
 #### Workspace setup ####
 import sys
 from pathlib import Path
@@ -60,12 +59,12 @@ NUMERIC_DTYPES = {pl.Int64, pl.Int32, pl.Float64, pl.Float32}
 def load_data():
     if not RAW_PATH.exists():
         print(f"FAIL  no raw data found at {RAW_PATH}")
-        print("      run 01-download_data.R first")
+        print("      run 02-download_data.R first")
         sys.exit(1)
 
     if not ANALYSIS_PATH.exists():
         print(f"FAIL  no analysis data found at {ANALYSIS_PATH}")
-        print("      run 02-clean_data.py first")
+        print("      run 03-clean_data.py first")
         sys.exit(1)
 
     raw_data = pl.read_csv(RAW_PATH)
@@ -188,6 +187,52 @@ def test_suppression_flag(raw_data, analysis_data):
 
     return failures
 
+
+#### Test 4: cleaning did not change the data ####
+def test_cleaning_preserves_data(raw_data, analysis_data):
+    failures = []
+
+    if raw_data.height != analysis_data.height:
+        failures.append(
+            f"raw data has {raw_data.height} rows, "
+            f"analysis data has {analysis_data.height} rows"
+        )
+
+    raw_total = (
+        raw_data
+        .filter(pl.col("Count") != "Suppressed")
+        .select(pl.col("Count").cast(pl.Int64).sum())
+        .item()
+    )
+    analysis_total = (
+        analysis_data
+        .filter(~pl.col("is_suppressed"))
+        .select(pl.col("Count").sum())
+        .item()
+    )
+
+    if raw_total != analysis_total:
+        failures.append(
+            f"total deaths in raw data (excluding suppressed cells) is "
+            f"{raw_total}, but {analysis_total} in analysis data"
+        )
+
+    # a stronger version of the same check: every non-suppressed row's count
+    # should be unchanged, not just the totals across all rows
+    if "_id" in raw_data.columns and "_id" in analysis_data.columns:
+        joined = raw_data.join(analysis_data, on="_id", suffix="_clean")
+        changed = joined.filter(pl.col("Count") != "Suppressed").filter(
+            pl.col("Count").cast(pl.Int64) != pl.col("Count_clean")
+        )
+        if changed.height > 0:
+            failures.append(
+                f"{changed.height} rows have a Count that differs between the "
+                f"raw and cleaned data, beyond suppression"
+            )
+
+    return failures
+
+
 #### Run tests ####
 def main():
     raw_data, analysis_data = load_data()
@@ -196,6 +241,7 @@ def main():
         ("Expected columns are present, with the right types", test_schema),
         ("All described category values are present", test_values_present),
         ("A cell is flagged suppressed only when its count is missing", test_suppression_flag),
+        ("Cleaning did not change the data", test_cleaning_preserves_data),
     ]
 
     all_passed = True
